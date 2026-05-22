@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0b0e;--surface:#111318;--surface2:#181c24;--border:#1e2430;
+  --green:#00e5a0;--green-dim:#003d2b;--red:#ff4757;--red-dim:#3d0a10;
+  --amber:#f0a500;--amber-dim:#3a2800;--blue:#4da6ff;--blue-dim:#0a2040;
+  --purple:#a78bfa;--gray:#4a5568;--gray-lite:#8892a4;
+  --text:#e2e8f0;--text-muted:#4a5568;--mono:'JetBrains Mono',monospace;--sans:'DM Sans',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px}
+.sim{display:grid;grid-template-columns:1fr 300px;grid-template-rows:auto auto 1fr auto;min-height:600px}
+
+.hdr{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+.hdr-title{font-family:var(--mono);font-size:12px;color:var(--text-muted);letter-spacing:.08em}.hdr-title span{color:var(--green)}
+.metrics{display:flex;gap:20px}
+.metric{text-align:right}.metric-val{font-family:var(--mono);font-size:15px;font-weight:700}.metric-lbl{font-size:9px;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase}
+
+.mode-selector{grid-column:1/-1;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:20px}
+.mode-label{font-family:var(--mono);font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;min-width:80px}
+.mode-buttons{display:flex;gap:8px}
+.mode-btn{font-family:var(--mono);font-size:10px;padding:6px 14px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--gray-lite);cursor:pointer;transition:all .2s;font-weight:600}
+.mode-btn:hover{border-color:var(--blue);color:var(--blue)}
+.mode-btn.active{font-weight:700;border-color:var(--green);background:var(--green-dim);color:var(--green)}
+.mode-btn.active.degraded{border-color:var(--amber);background:var(--amber-dim);color:var(--amber)}
+.mode-btn.active.chaos{border-color:var(--red);background:var(--red-dim);color:var(--red)}
+.mode-desc{font-family:var(--mono);font-size:9px;color:var(--text-muted);margin-left:auto}
+
+.left{padding:18px;display:flex;flex-direction:column;gap:14px;border-right:1px solid var(--border);overflow-y:auto}
+.section-label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:7px}
+.scenarios{display:flex;flex-wrap:wrap;gap:5px}
+.sc-btn{font-family:var(--mono);font-size:10px;padding:4px 9px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--gray-lite);cursor:pointer;transition:all .2s}
+.sc-btn:hover{border-color:var(--blue);color:var(--blue)}
+.sc-btn.active{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+.log-area{font-family:var(--mono);font-size:11px;width:100%;min-height:68px;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px;outline:none;transition:border-color .2s}
+.log-area:focus{border-color:var(--blue)}
+.btn-run{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.05em;padding:8px 18px;border-radius:5px;border:none;background:var(--green);color:#000;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.btn-run:hover{opacity:.88}.btn-run:disabled{background:var(--gray);cursor:default;opacity:.5}
+
+.pipeline{display:flex;align-items:center;padding:4px 0}
+.pnode{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+.pnode-circle{width:38px;height:38px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .4s}
+.pnode-label{font-size:8px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);transition:color .3s;text-align:center}
+.pipe-connector{flex:1;height:2px;background:var(--border);margin-bottom:16px;transition:background .4s;position:relative;overflow:visible}
+.pipe-connector.flowing::after{content:'';position:absolute;top:-1px;left:0;width:30%;height:4px;background:var(--green);border-radius:2px;animation:flow 1s linear infinite}
+@keyframes flow{from{transform:translateX(-100%)}to{transform:translateX(400%)}}
+.pnode.state-pending .pnode-circle{border-color:var(--amber);box-shadow:0 0 10px var(--amber-dim)}
+.pnode.state-active .pnode-circle{border-color:var(--blue);box-shadow:0 0 14px rgba(77,166,255,.3);animation:pb .8s ease-in-out infinite alternate}
+.pnode.state-error .pnode-circle{border-color:var(--red);box-shadow:0 0 16px rgba(255,71,87,.5);animation:pr .4s ease-in-out infinite alternate}
+.pnode.state-done .pnode-circle{border-color:var(--green);box-shadow:0 0 16px rgba(0,229,160,.35)}
+.pnode.state-fallback .pnode-circle{border-color:var(--amber);box-shadow:0 0 14px rgba(240,165,0,.4);animation:pa .6s ease-in-out infinite alternate}
+.pnode.state-active .pnode-label{color:var(--text)}.pnode.state-done .pnode-label{color:var(--green)}
+.pnode.state-error .pnode-label{color:var(--red)}.pnode.state-fallback .pnode-label{color:var(--amber)}.pnode.state-pending .pnode-label{color:var(--amber)}
+@keyframes pb{from{box-shadow:0 0 6px rgba(77,166,255,.2)}to{box-shadow:0 0 20px rgba(77,166,255,.5)}}
+@keyframes pa{from{box-shadow:0 0 6px rgba(240,165,0,.2)}to{box-shadow:0 0 20px rgba(240,165,0,.5)}}
+@keyframes pr{from{box-shadow:0 0 6px rgba(255,71,87,.2);background:transparent}to{box-shadow:0 0 22px rgba(255,71,87,.7);background:var(--red-dim)}}
+
+.status-row{display:flex;align-items:center;gap:8px;padding:9px 13px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);min-height:42px}
+.status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:background .3s}
+.status-text{font-family:var(--mono);font-size:11px;color:var(--text-muted)}
+.status-badge{margin-left:auto;font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:.05em;display:none}
+
+.workers{display:flex;gap:6px;margin-bottom:8px}
+.worker{flex:1;border-radius:5px;border:1px solid var(--border);background:var(--surface2);padding:8px 10px;transition:all .3s;position:relative;overflow:hidden}
+.worker::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(77,166,255,0.1),transparent);opacity:0;animation:none}
+.worker.busy::before{opacity:1;animation:wp-pulse 1.5s ease-in-out infinite}
+.worker-id{font-family:var(--mono);font-size:9px;color:var(--text-muted);letter-spacing:.04em}
+.worker-job{font-family:var(--mono);font-size:8px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.worker-state{font-family:var(--mono);font-size:9px;margin-top:3px;transition:color .3s;color:var(--text-muted);font-weight:600}
+.worker-util{display:flex;gap:4px;margin-top:4px;font-size:7px;color:var(--text-muted)}
+.worker-util-label{min-width:30px}
+.worker-util-bar{flex:1;height:2px;background:var(--border);border-radius:1px;overflow:hidden}
+.worker-util-fill{height:100%;border-radius:1px;width:0%;background:var(--blue);transition:width .4s}
+.worker.busy .worker-util-fill{background:var(--blue);animation:util-pulse 1.2s ease-in-out infinite}
+.worker.done .worker-util-fill{background:var(--green);width:100%}
+.worker-dot{width:4px;height:4px;border-radius:50%;display:inline-block;margin-right:4px;background:var(--gray);transition:background .3s}
+.worker.busy .worker-dot{background:var(--blue);animation:dot-pulse 1.2s ease-in-out infinite}
+.worker.done .worker-dot{background:var(--green)}
+.worker.idle .worker-state{color:var(--text-muted)}
+.worker.busy .worker-state{color:var(--blue)}
+.worker.busy .worker-id{color:var(--blue)}
+.worker.busy .worker-job{color:var(--blue);opacity:.8}
+.worker.done .worker-state{color:var(--green)}
+.worker.done .worker-id{color:var(--green)}
+.worker-summary{font-family:var(--mono);font-size:9px;color:var(--text-muted);padding:8px;background:var(--surface2);border-radius:4px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.worker-summary-item{font-size:8px}
+.worker-summary-label{color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.worker-summary-val{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--green)}
+@keyframes wp-pulse{0%,100%{opacity:0.5}50%{opacity:1}}
+@keyframes util-pulse{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
+@keyframes dot-pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.2)}}
+
+.fix-card{border-radius:8px;border:1px solid var(--green);background:var(--green-dim);padding:14px 16px;animation:fix-in .5s cubic-bezier(.22,1,.36,1)}
+@keyframes fix-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.fix-label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--green);margin-bottom:6px;font-family:var(--mono)}
+.fix-severity{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sev-pill{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 9px;border-radius:3px;letter-spacing:.05em}
+.sev-CRITICAL{background:#3d0a10;color:var(--red)}.sev-HIGH{background:#3a2800;color:var(--amber)}.sev-MEDIUM{background:#0a2040;color:var(--blue)}.sev-LOW{background:#003d2b;color:var(--green)}
+.fix-text{font-family:var(--mono);font-size:11px;color:#c8f7e8;line-height:1.6;margin-bottom:12px}
+.fix-source{font-size:9px;font-family:var(--mono);color:var(--green);opacity:.7;margin-bottom:12px}
+.btn-next{font-family:var(--mono);font-size:11px;font-weight:700;padding:8px 16px;border-radius:5px;border:1px solid var(--green);background:transparent;color:var(--green);cursor:pointer;width:100%;transition:all .2s;letter-spacing:.04em}
+.btn-next:hover{background:var(--green);color:#000}
+
+.right{display:flex;flex-direction:column;overflow:hidden}
+.tl-hdr{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.tl-hdr-title{font-family:var(--mono);font-size:10px;color:var(--text-muted);letter-spacing:.08em}
+.tl-clear{font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-family:var(--mono)}
+.tl-clear:hover{border-color:var(--red);color:var(--red)}
+.timeline{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:2px}
+.timeline::-webkit-scrollbar{width:3px}.timeline::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.tl-entry{display:flex;gap:7px;align-items:flex-start;padding:3px 5px;border-radius:3px;animation:tl-in .2s ease-out}
+@keyframes tl-in{from{opacity:0;transform:translateX(6px)}to{opacity:1;transform:none}}
+.tl-time{font-family:var(--mono);font-size:9px;color:var(--text-muted);flex-shrink:0;padding-top:2px}
+.tl-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.tl-msg{font-family:var(--mono);font-size:10px;color:var(--text-muted);line-height:1.5}
+.tl-entry.info .tl-dot{background:var(--blue)}.tl-entry.info .tl-msg{color:var(--text)}
+.tl-entry.warn .tl-dot{background:var(--amber)}.tl-entry.warn .tl-msg{color:var(--amber)}
+.tl-entry.err .tl-dot{background:var(--red)}.tl-entry.err .tl-msg{color:var(--red)}
+.tl-entry.ok .tl-dot{background:var(--green)}.tl-entry.ok .tl-msg{color:var(--green)}
+.tl-entry.muted .tl-dot{background:var(--gray)}
+
+.bot{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:7px 20px;border-top:1px solid var(--border);background:var(--surface)}
+.bot-item{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;color:var(--text-muted)}
+.bot-dot{width:5px;height:5px;border-radius:50%}
+.lat-wrap{display:flex;align-items:center;gap:6px;margin-left:auto}
+@keyframes glow-green{0%,100%{box-shadow:0 0 16px rgba(0,229,160,.3)}50%{box-shadow:0 0 38px rgba(0,229,160,.8)}}
+.completed-glow{animation:glow-green 1.2s ease-in-out 4}
+
+/* REQUEST CARDS */
+.requests-section{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
+.requests-header{font-family:var(--mono);font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+.request-card{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:8px;font-size:9px;font-family:var(--mono)}
+.request-id{color:var(--purple);font-weight:700;margin-bottom:4px}
+.request-status{display:flex;gap:8px;margin-bottom:4px}
+.status-pill{padding:1px 6px;border-radius:2px;font-size:8px;font-weight:600}
+.status-success{background:rgba(0,229,160,0.2);color:var(--green)}
+.status-fallback{background:rgba(240,165,0,0.2);color:var(--amber)}
+.request-meta{display:flex;gap:12px;color:var(--text-muted);font-size:8px}
+.request-progress{height:2px;background:var(--border);border-radius:1px;margin-top:6px;overflow:hidden}
+.request-progress-fill{height:100%;background:var(--green);border-radius:1px;transition:width .3s}
+
+.mini-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;background:var(--surface2);border-radius:4px;margin-bottom:8px}
+.mini-stat{font-size:8px}
+.mini-stat-label{color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:.04em}
+.mini-stat-val{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--green)}
+
+.trace-section{padding:8px;background:var(--surface2);border-radius:4px;border-left:2px solid var(--blue);margin-bottom:8px}
+.trace-header{font-family:var(--mono);font-size:8px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase}
+.trace-stages{display:flex;gap:2px;height:20px}
+.trace-stage{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--text-muted);transition:all .3s}
+.trace-stage.active{background:var(--blue);border-color:var(--blue);color:#000;font-weight:700}
+.trace-stage.done{background:var(--green);border-color:var(--green);color:#000;font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="sim" id="sim">
+  <div class="hdr">
+    <div class="hdr-title">AI LOG ANALYZER <span>// resilience simulation</span></div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-val" id="m-proc">0</div><div class="metric-lbl">total requests</div></div>
+      <div class="metric"><div class="metric-val" id="m-ai" style="color:var(--green)">0</div><div class="metric-lbl">✨ via AI</div></div>
+      <div class="metric"><div class="metric-val" id="m-fb" style="color:var(--amber)">0</div><div class="metric-lbl">🛡 via fallback</div></div>
+      <div class="metric"><div class="metric-val" id="m-rate" style="color:var(--amber)">0%</div><div class="metric-lbl">fallback %</div></div>
+      <div class="metric"><div class="metric-val" id="m-lat">—</div><div class="metric-lbl">avg latency</div></div>
+      <div class="metric"><div class="metric-val" id="m-tp">0</div><div class="metric-lbl">jobs/min</div></div>
+    </div>
+  </div>
+
+  <div class="mode-selector">
+    <div class="mode-label">System Mode:</div>
+    <div class="mode-buttons">
+      <button class="mode-btn active" onclick="setMode('normal')">NORMAL</button>
+      <button class="mode-btn degraded" onclick="setMode('degraded')">DEGRADED</button>
+      <button class="mode-btn chaos" onclick="setMode('chaos')">CHAOS</button>
+    </div>
+    <div class="mode-desc" id="mode-info">healthy infrastructure · AI success ~85%</div>
+  </div>
+
+  <div class="left">
+    <div>
+      <div class="section-label">Select failure scenario</div>
+      <div class="scenarios" id="scenarios"></div>
+    </div>
+    <div>
+      <div class="section-label">Or paste your log</div>
+      <textarea class="log-area" id="log-input" placeholder="Paste any log line here and run analysis..."></textarea>
+    </div>
+    <button class="btn-run" id="run-btn" onclick="runSim()">▶ &nbsp;RUN ANALYSIS</button>
+    <div>
+      <div class="section-label">Workflow pipeline</div>
+      <div class="pipeline" id="pipeline"></div>
+    </div>
+    <div class="status-row" id="status-row">
+      <div class="status-dot" id="sdot" style="background:var(--gray)"></div>
+      <div class="status-text" id="stext">Awaiting input...</div>
+      <div class="status-badge" id="sbadge"></div>
+    </div>
+    <div>
+      <div class="section-label">Async workers</div>
+      <div class="workers" id="workers"></div>
+    </div>
+
+    <div class="requests-section" id="requests-section">
+      <div class="requests-header">Active requests</div>
+      <div id="request-cards-container"></div>
+    </div>
+
+    <div id="fix-slot"></div>
+  </div>
+
+  <div class="right">
+    <div class="tl-hdr">
+      <div class="tl-hdr-title">LIVE TIMELINE</div>
+      <button class="tl-clear" onclick="clearTL()">CLEAR</button>
+    </div>
+    <div class="timeline" id="timeline"></div>
+  </div>
+
+  <div class="bot">
+    <div class="bot-item"><div class="bot-dot" style="background:var(--green)"></div>Workers: <span id="bot-w">4 idle</span></div>
+    <div class="bot-item"><div class="bot-dot" style="background:var(--amber)"></div>Queue: <span id="bot-q">0</span></div>
+    <div class="bot-item">Circuit breaker: <span id="bot-cb" style="color:var(--green)">CLOSED</span></div>
+    <div class="lat-wrap">
+      <span style="font-size:9px;font-family:var(--mono);color:var(--text-muted)\">AI latency:</span>
+      <div style="width:100px;height:3px;background:var(--border);border-radius:2px;overflow:hidden">
+        <div id="lat-fill" style="height:100%;width:0%;background:var(--blue);border-radius:2px;transition:width .5s"></div>
+      </div>
+      <span id="lat-val" style="font-size:9px;font-family:var(--mono);color:var(--text-muted)">—ms</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const SC = [
+  {id:'k8s',label:'K8s CrashLoop',ai:'random',log:'[CRIT] Pod payment-worker-7f9b CrashLoopBackOff (exit 137)\\n[ERROR] Liveness probe failed',events:['Pod restart loop detected','OOMKill suspected (exit 137)'],severity:'CRITICAL',fix:'Increase memory limits; add OOM guard',source:'RULE ENGINE'},
+  {id:'kafka',label:'Kafka Lag',ai:'random',log:'[WARN] Consumer lag: 48291\\n[ERROR] Poll timeout exceeded',events:['Consumer behind','Poll stalling'],severity:'HIGH',fix:'Scale consumer instances; tune max.poll.records',source:'RULE ENGINE'},
+  {id:'pg',label:'PG Pool',ai:'random',log:'[ERROR] HikariCP pool exhausted\\n[ERROR] Connection timeout',events:['Pool saturated','Thread contention'],severity:'HIGH',fix:'Increase pool size to 20+; add circuit breaker',source:'OPENAI'},
+  {id:'openai',label:'AI Timeout',ai:'random',log:'[WARN] OpenAI API latency: 4821ms\\n[ERROR] Request timeout',events:['AI response exceeded','Network timeout'],severity:'MEDIUM',fix:'Implement timeout budget + fallback; cache patterns',source:'RULE ENGINE'},
+  {id:'nginx',label:'Nginx Upstream',ai:'random',log:'[ERROR] upstream timed out\\n[WARN] all backends unhealthy\\n[ERROR] 502 Bad Gateway',events:['All upstream down','Circuit breaker open','502 cascade'],severity:'CRITICAL',fix:'Add health checks; configure backup upstream',source:'OPENAI'},
+  {id:'quorum',label:'Quorum Unstable',ai:'random',log:'[ERROR] Raft quorum lost — only 1 of 3 reachable\\n[CRIT] Leader election',events:['Quorum below majority','Leader election triggered','Writes suspended'],severity:'CRITICAL',fix:'Restore node connectivity; check network partition',source:'RULE ENGINE'},
+];
+
+const MODES={normal:{label:'NORMAL',desc:'healthy infrastructure · AI success ~85%',aiSuccess:0.85,latencyBase:1200},degraded:{label:'DEGRADED',desc:'elevated latency · AI success ~50%',aiSuccess:0.50,latencyBase:2200},chaos:{label:'CHAOS',desc:'failure injection · AI success ~15%',aiSuccess:0.15,latencyBase:4000}};
+
+const PNODES=[{id:'ingest',icon:'⬇',label:'Ingest'},{id:'queue',icon:'⏳',label:'Queue'},{id:'worker',icon:'⚙',label:'Worker'},{id:'ai',icon:'🤖',label:'AI'},{id:'fallback',icon:'🛡',label:'Fallback'},{id:'done',icon:'✓',label:'Done'}];
+
+let sel=null,totalProc=0,totalAI=0,totalFB=0,lats=[],running=false,scIdx=0,currentMode='normal';
+
+function setMode(mode){
+  currentMode=mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active','degraded','chaos'));
+  const btn=event.target;
+  btn.classList.add('active');
+  if(mode!=='normal')btn.classList.add(mode);
+  document.getElementById('mode-info').textContent=MODES[mode].desc;
+}
+
+function renderRequestCard(reqId, status, latency, severity, wasFallback, progress=100){
+  const container=document.getElementById('request-cards-container');
+  let card=document.getElementById('req-'+reqId);
+  
+  if(!card){
+    card=document.createElement('div');
+    card.className='request-card';
+    card.id='req-'+reqId;
+    card.innerHTML=`
+      <div class="request-id">${reqId}</div>
+      <div class="request-status">
+        <span class="status-pill ${wasFallback?'status-fallback':'status-success'}">${wasFallback?'🛡 FALLBACK':'✨ AI'}</span>
+        <span style="color:var(--text-muted)">${severity}</span>
+      </div>
+      <div class="request-meta">
+        <div class="request-meta-item">⏱ <span id="lat-${reqId}">${latency}ms</span></div>
+        <div class="request-meta-item">📊 <span id="prg-${reqId}">${progress}%</span></div>
+      </div>
+      <div class="request-progress"><div class="request-progress-fill" style="width:${progress}%"></div></div>
+    `;
+    container.appendChild(card);
+  } else {
+    document.getElementById('lat-'+reqId).textContent=latency+'ms';
+    document.getElementById('prg-'+reqId).textContent=progress+'%';
+    card.querySelector('.request-progress-fill').style.width=progress+'%';
+  }
+}
+
+function renderDistributedTrace(stages){
+  const container=document.getElementById('request-cards-container');
+  let trace=document.getElementById('trace-viz');
+  
+  if(!trace){
+    trace=document.createElement('div');
+    trace.className='trace-section';
+    trace.id='trace-viz';
+    trace.innerHTML='<div class="trace-header">Distributed trace</div><div class="trace-stages" id="trace-stages"></div>';
+    container.appendChild(trace);
+  }
+  
+  const stagesDiv=document.getElementById('trace-stages');
+  stagesDiv.innerHTML='';
+  const stageNames=['ingest','queue','worker','ai','complete'];
+  stageNames.forEach((name,i)=>{
+    const stage=document.createElement('div');
+    stage.className='trace-stage done';
+    stage.textContent=name.substring(0,3).toUpperCase();
+    stage.title=name;
+    stagesDiv.appendChild(stage);
+  });
+}
+
+function init(){
+  const sc=document.getElementById('scenarios');
+  SC.forEach((s,i)=>{const b=document.createElement('button');b.className='sc-btn';b.textContent=s.label;b.dataset.id=s.id;b.onclick=()=>pick(s.id,b);sc.appendChild(b);});
+  const pl=document.getElementById('pipeline');
+  PNODES.forEach((n,i)=>{const d=document.createElement('div');d.className='pnode';d.id='pn-'+n.id;d.innerHTML=`<div class="pnode-circle">${n.icon}</div><div class="pnode-label">${n.label}</div>`;pl.appendChild(d);if(i<PNODES.length-1){const c=document.createElement('div');c.className='pipe-connector';c.id='pc-'+n.id;pl.appendChild(c);}});
+  const wr=document.getElementById('workers');
+  for(let i=1;i<=4;i++){const w=document.createElement('div');w.className='worker';w.id='w'+i;w.innerHTML=`<div><span class="worker-dot"></span><div class="worker-id">W${i}</div></div><div class="worker-job" id="job-w${i}">—</div><div class="worker-state" id="state-w${i}">idle</div><div class="worker-util"><span class="worker-util-label">util:</span><div class="worker-util-bar"><div class="worker-util-fill" id="util-w${i}"></div></div></div>`;wr.appendChild(w);}
+  
+  const summary=document.createElement('div');
+  summary.className='worker-summary';
+  summary.innerHTML=`<div class="worker-summary-item"><div class="worker-summary-label">Active</div><div class="worker-summary-val" id="summary-active">0/4</div></div><div class="worker-summary-item"><div class="worker-summary-label">Utilization</div><div class="worker-summary-val" id="summary-util">0%</div></div>`;
+  document.getElementById('workers').parentElement.insertBefore(summary, document.getElementById('workers').nextSibling);
+}
+
+function pick(id,btn){document.querySelectorAll('.sc-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');sel=SC.find(s=>s.id===id);document.getElementById('log-input').value=sel.log;document.getElementById('fix-slot').innerHTML='';}
+
+function clearTL(){document.getElementById('timeline').innerHTML='';}
+
+function tl(msg,type='muted',delay=0){return new Promise(r=>setTimeout(()=>{const now=new Date();const ts=`${h(now.getHours())}:${h(now.getMinutes())}:${h(now.getSeconds())}`;const el=document.createElement('div');el.className=`tl-entry ${type}`;el.innerHTML=`<span class="tl-time">${ts}</span><div class="tl-dot"></div><span class="tl-msg">${msg}</span>`;const t=document.getElementById('timeline');t.appendChild(el);t.scrollTop=t.scrollHeight;r();},delay));}
+const h=n=>String(n).padStart(2,'0');
+
+function setPnode(id,state){const e=document.getElementById('pn-'+id);if(e)e.className='pnode state-'+state;}
+function setConn(id,on){const e=document.getElementById('pc-'+id);if(e)e.className='pipe-connector'+(on?' flowing':'');}
+function setStatus(text,dot,badge,bc){document.getElementById('stext').textContent=text;document.getElementById('sdot').style.background=dot;const b=document.getElementById('sbadge');if(badge){b.style.display='block';b.textContent=badge;b.style.background=bc;b.style.color='#000';}else b.style.display='none';}
+function setWorker(i,state,jobId=''){
+  const w=document.getElementById('w'+i);
+  if(!w)return;
+  w.className='worker'+(state!=='idle'?' '+state:'');
+  document.getElementById('state-w'+i).textContent=state==='busy'?'processing':state==='done'?'complete':'idle';
+  document.getElementById('job-w'+i).textContent=jobId||'—';
+  const activeCount=document.querySelectorAll('.worker.busy, .worker.done').length;
+  document.getElementById('summary-active').textContent=activeCount+'/4';
+  document.getElementById('summary-util').textContent=Math.round(activeCount/4*100)+'%';
+  
+  if(state==='busy'){
+    document.getElementById('util-w'+i).style.width='75%';
+  } else if(state==='done'){
+    document.getElementById('util-w'+i).style.width='100%';
+  } else {
+    document.getElementById('util-w'+i).style.width='0%';
+  }
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function resetAll(){PNODES.forEach(n=>{setPnode(n.id,'');setConn(n.id,false);});document.getElementById('lat-fill').style.width='0%';document.getElementById('lat-val').textContent='—ms';document.getElementById('bot-q').textContent='0';document.getElementById('bot-cb').textContent='CLOSED';document.getElementById('bot-cb').style.color='var(--green)';document.getElementById('fix-slot').innerHTML='';setStatus('Awaiting input...','var(--gray)',null);for(let i=1;i<=4;i++)setWorker(i,'idle');}
+
+async function runSim(){
+  if(running)return;
+  const logText=document.getElementById('log-input').value.trim();
+  if(!logText){tl('⚠ No log input','warn');return;}
+  running=true;document.getElementById('run-btn').disabled=true;document.getElementById('fix-slot').innerHTML='';
+
+  const s=sel;
+  const modeConfig=MODES[currentMode];
+  const aiSuccessRate=modeConfig.aiSuccess;
+  const aiSuccessRand=Math.random()<aiSuccessRate;
+  const aiFail=!aiSuccessRand;
+  const severity=s?s.severity:'HIGH';
+  const fix=s?s.fix:'Review system configuration';
+  const fixSrc=s?s.source:'RULE ENGINE';
+  const events=s?s.events:['Log pattern detected'];
+
+  PNODES.forEach(n=>{setPnode(n.id,'');setConn(n.id,false);});
+  document.getElementById('lat-fill').style.width='0%';document.getElementById('lat-fill').style.background='var(--blue)';
+  document.getElementById('lat-val').textContent='—ms';document.getElementById('bot-q').textContent='1';document.getElementById('fix-slot').innerHTML='';
+
+  const t0=Date.now();
+
+  await tl('Log entry received','info');
+  setPnode('ingest','active');setStatus('Parsing log entry...','var(--blue)');
+  const reqId='req-'+Math.random().toString(36).substr(2,5);
+  renderRequestCard(reqId, 'processing', 0, severity, false, 15);
+  await sleep(550);setPnode('ingest','done');setConn('ingest',true);
+
+  await tl('Analysis queued → PENDING','muted',80);
+  setPnode('queue','pending');setStatus('Queued — awaiting worker','var(--amber)','PENDING','var(--amber)');
+  renderRequestCard(reqId, 'pending', 100, severity, false, 30);
+  await sleep(650);setPnode('queue','done');setConn('queue',true);
+  document.getElementById('bot-q').textContent='0';
+
+  await tl('Worker-001 picked job','info',80);
+  setWorker(1,'busy',reqId);setPnode('worker','active');setStatus('Worker processing...','var(--blue)','PROCESSING','var(--blue)');
+  renderRequestCard(reqId, 'processing', 150, severity, false, 50);
+  await sleep(700);setConn('worker',true);
+
+  await tl('Sending to AI analysis engine','info',80);
+  setPnode('ai','active');setStatus('AI analyzing...','var(--purple)');
+  document.getElementById('lat-fill').style.width='100%';
+
+  if(aiFail){
+    let ms=0;const lv=document.getElementById('lat-val');
+    const latencyTarget=modeConfig.latencyBase+Math.random()*1000;
+    const iv=setInterval(()=>{ms+=110;lv.textContent=ms+'ms';if(ms>=latencyTarget)clearInterval(iv);},110);
+    await sleep(550);await tl(`AI latency: ${Math.round(latencyTarget*0.35)}ms...`,'warn');
+    await sleep(650);await tl(`AI latency: ${Math.round(latencyTarget*0.72)}ms...`,'warn');
+    await sleep(650);await tl(`⚠ AI timeout — ${Math.round(latencyTarget)}ms threshold breached`,'err');
+    clearInterval(iv);document.getElementById('lat-val').textContent=Math.round(latencyTarget)+'ms+';
+    document.getElementById('lat-fill').style.background='var(--red)';
+    setPnode('ai','error');setStatus('AI timeout detected','var(--red)','AI FAILED','var(--red)');
+    document.getElementById('bot-cb').textContent='OPEN';document.getElementById('bot-cb').style.color='var(--red)';
+    await sleep(450);
+    await tl('→ Fallback engine activating automatically','warn',80);
+    setConn('ai',false);
+    setPnode('fallback','fallback');setStatus('Rule engine classifying...','var(--amber)','FALLBACK','var(--amber)');
+    for(const ev of events){await tl('  '+ev,'muted',70);await sleep(70);}
+    await sleep(450);await tl('Rule classification complete','warn',80);
+    totalFB++;
+  } else {
+    let ms=0;const lv=document.getElementById('lat-val');
+    const latencyTarget=modeConfig.latencyBase-Math.random()*500;
+    const iv=setInterval(()=>{ms+=75;lv.textContent=ms+'ms';if(ms>=latencyTarget)clearInterval(iv);},75);
+    for(const ev of events){await tl('  '+ev,'muted',80);await sleep(80);}
+    await sleep(650);clearInterval(iv);
+    await tl('AI analysis complete','info');
+    setConn('ai',true);
+    document.getElementById('lat-fill').style.background='var(--green)';
+  }
+
+  const latency=Date.now()-t0;
+  lats.push(latency);totalProc++;
+  if(aiFail){totalFB++;}else{totalAI++;}
+  
+  renderRequestCard(reqId, 'done', latency, severity, aiFail, 100);
+  renderDistributedTrace(['ingest','queue','worker','ai','complete']);
+  
+  await sleep(280);
+
+  await tl(`Severity classified: ${severity}`,'ok',80);
+  await sleep(180);
+  await tl('✓ Workflow COMPLETED','ok',80);
+
+  setPnode('done','done');setConn('fallback',true);
+  const dc=document.getElementById('pn-done').querySelector('.pnode-circle');
+  dc.classList.add('completed-glow');
+  setTimeout(()=>dc.classList.remove('completed-glow'),6000);
+  setStatus('Workflow complete — analysis succeeded','var(--green)','COMPLETED','var(--green)');
+
+  setWorker(1,'done',reqId);
+  await sleep(700);setWorker(1,'idle','');
+
+  const avgLat=Math.round(lats.reduce((a,b)=>a+b,0)/lats.length);
+  const rate=Math.round(totalFB/totalProc*100);
+  document.getElementById('m-proc').textContent=totalProc;
+  document.getElementById('m-ai').textContent=totalAI;
+  document.getElementById('m-fb').textContent=totalFB;
+  document.getElementById('m-rate').textContent=rate+'%';
+  document.getElementById('m-lat').textContent=avgLat+'ms';
+  document.getElementById('m-rate').style.color=rate>30?'var(--red)':rate>0?'var(--amber)':'var(--green)';
+  document.getElementById('m-tp').textContent=Math.min(Math.round(totalProc*2.6),48);
+  document.getElementById('bot-cb').textContent='CLOSED';document.getElementById('bot-cb').style.color='var(--green)';
+
+  showFix(severity,fix,fixSrc,aiFail,aiSuccessRate);
+
+  running=false;document.getElementById('run-btn').disabled=false;
+}
+
+function showFix(severity,fix,source,wasFallback,aiSuccessRate){
+  const slot=document.getElementById('fix-slot');
+  const sevClass='sev-'+severity;
+  const nextIdx=(scIdx+1)%SC.length;
+  const nextLabel=SC[nextIdx].label;
+
+  slot.innerHTML=`
+    <div class="fix-card">
+      <div class="fix-label">✓ Analysis result</div>
+      <div class="fix-severity">
+        <span class="sev-pill ${sevClass}">${severity}</span>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--text-muted)">${wasFallback?'via fallback':'via AI'}</span>
+      </div>
+      <div class="fix-text">${fix}</div>
+      <div class="fix-source">source: ${source} · mode: ${MODES[currentMode].label} · ai-success-rate: ${Math.round(aiSuccessRate*100)}%</div>
+      <button class="btn-next" onclick="tryNext()">→ Try next scenario: ${nextLabel}</button>
+    </div>`;
+  scIdx=nextIdx;
+}
+
+function tryNext(){resetAll();clearTL();document.querySelectorAll('.sc-btn').forEach(b=>b.classList.remove('active'));const next=SC[scIdx];sel=next;document.getElementById('log-input').value=next.log;const btn=document.querySelector(`.sc-btn[data-id="${next.id}"]`);if(btn)btn.classList.add('active');tl(`Scenario loaded: ${next.label}`,'info');}
+
+init();
+</script>
+</body>
+</html>
